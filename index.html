@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -100,7 +99,7 @@ footer{text-align:center;color:var(--muted);font-size:.84rem;margin:25px 5px 45p
    <p class="equation">PMAT = Prophase → Metaphase → Anaphase → Telophase</p>
    <p><strong>Final check:</strong> Interphase copies the DNA; mitosis separates the chromosomes into two nuclei; cytokinesis separates the cell. <strong>Meiosis is not on this qualifier.</strong></p>
   </article>
-  <div class="controls"><button type="button" class="secondary" id="back-study" hidden>← Previous</button><button type="button" id="next-study">Next review topic →</button></div>
+  <div class="controls"><button type="button" class="secondary" id="back-study" hidden>← Previous</button><button type="button" class="secondary" id="skip-study">Go straight to qualifier →</button><button type="button" id="next-study">Next review topic →</button></div>
 </section>
 
 <section id="entry" class="card" hidden>
@@ -111,7 +110,7 @@ footer{text-align:center;color:var(--muted);font-size:.84rem;margin:25px 5px 45p
  <label for="name">Student first and last name</label><input id="name" type="text" maxlength="100" autocomplete="name" placeholder="First Last">
  <label for="block">Biology class block</label><select id="block"><option value="">Choose class block</option><option value="2nd Block">2nd Block</option><option value="4th Block">4th Block</option></select>
  <label for="makeup">Makeup code (only for approved absent students after closing)</label><input id="makeup" autocomplete="off" type="text" placeholder="Leave blank for regular access">
- <div class="checkline" style="margin-top:18px"><input id="review-confirm" type="checkbox"><label for="review-confirm">I reviewed Chapter 7 and the three Chapter 8A lessons (DNA and chromosomes, cell cycle, mitosis), and I am ready for the timed qualifier.</label></div>
+ <div class="checkline" style="margin-top:18px"><input id="review-confirm" type="checkbox"><label for="review-confirm">Optional acknowledgment: I reviewed Chapter 7 and the three Chapter 8A lessons (DNA and chromosomes, cell cycle, mitosis), and I am ready for the timed qualifier.</label></div>
  <p class="muted">One question at a time; no going back. You can review missed questions and your own answers afterward, but correct answers are not shown.</p>
  <div class="controls"><button type="button" class="secondary" id="review-again">Review again</button><button type="button" id="start">Start my Unit 4 Qualifier</button></div>
 </section>
@@ -142,9 +141,7 @@ const ENDPOINT='https://script.google.com/macros/s/AKfycbzfe3t-88Jl4UVAec2lg4-Zn
 const $=id=>document.getElementById(id);
 // New attempt key prevents resuming unfinished attempts from the old version.
 const KEY='unit4_qualifier_attempt_ch7_8a_v2';
-// Safety gate: the Apps Script must confirm the revised question bank before this qualifier opens.
-const REQUIRED_VERSION='bio_u4_ch7_42_ch8a_18_2026';
-let qualifierReady=false;
+// Quiz entry is not gated by a matching question-bank version; server validates attempts.
 let reviewStep=0,attemptId='',current=null,busy=false,timerId=null,qDeadline=0,totalDeadline=0,questionNumber=0;
 const sections=['review','entry','loading','quiz','results','alert'];
 function show(view){sections.forEach(id=>$(id).hidden=id!==view);window.scrollTo({top:0,behavior:'instant'});}
@@ -176,6 +173,7 @@ function updateReview(){
 }
 $('next-study').onclick=()=>{if(reviewStep<4){reviewStep++;updateReview();window.scrollTo({top:0})}else{show('entry');}};
 $('back-study').onclick=()=>{reviewStep=Math.max(0,reviewStep-1);updateReview();};
+$('skip-study').onclick=()=>show('entry');
 $('review-again').onclick=()=>{reviewStep=0;updateReview();show('review');};
 function stopTimer(){if(timerId){clearInterval(timerId);timerId=null;}}
 function clocks(){
@@ -234,7 +232,6 @@ async function begin(){
  if(busy)return;
  const name=$('name').value.trim().replace(/\s+/g,' '),block=$('block').value,makeup=$('makeup').value.trim();
  if(name.split(' ').length<2||!block){showError('Please enter your first and last name and choose a Biology class block.');return}
- if(!$('review-confirm').checked){showError('Please confirm that you completed the five-section study review first.');return}
  if(!ENDPOINT.startsWith('https://script.google.com/macros/s/')){showError('The teacher needs to finish connecting the Google Sheets quiz server before this qualifier can be taken.');return}
  busy=true;attemptId=uuid();localStorage.setItem(KEY,attemptId);show('loading');$('loading-message').textContent='Creating your personalized question order…';
  try{post({action:'start',attemptId,name,block,makeup});const r=await waitFor(1);if(r.done)showResults(r);else renderQuestion(r.question,r.attemptNumber)}
@@ -245,14 +242,11 @@ $('return-start').onclick=()=>{busy=false;localStorage.removeItem(KEY);attemptId
 $('again').onclick=()=>{localStorage.removeItem(KEY);attemptId='';current=null;stopTimer();$('review-confirm').checked=false;reviewStep=0;updateReview();show('review');};
 async function init(){
  updateReview();
- $('start').disabled=true;
+ $('start').disabled=false;
  if(!ENDPOINT.startsWith('https://script.google.com/macros/s/')){$('window-note').textContent='Teacher setup pending: the Apps Script deployment link must be connected before students can begin.';return;}
  try{const s=await jsonp('status');if(!s.ok)throw new Error(s.error||'No connection');
-  qualifierReady=(s.quizVersion===REQUIRED_VERSION);
-  $('start').disabled=!qualifierReady;
-  $('window-note').textContent= !qualifierReady
-    ? 'Teacher setup pending: the revised Chapter 7 + Chapter 8A question bank has not been activated. The old qualifier is intentionally blocked.'
-    : s.open
+  $('start').disabled=false;
+  $('window-note').textContent=s.open
     ? `Qualifier available. Opens ${s.openDate}; ${s.closeDate?'closes '+s.closeDate:'closing date set by your teacher'}, Eastern Time.`
     : `Regular access is closed. Scheduled ${s.openDate} to ${s.closeDate||'a teacher-selected closing date'}; a personal makeup code may be required.`;
  }catch(e){$('window-note').textContent='We could not verify the qualifier schedule: '+e.message;}
